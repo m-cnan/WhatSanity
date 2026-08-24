@@ -1,0 +1,28 @@
+services:
+  app:
+    build: .
+    container_name: wa-filter
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:8080:8080"   # dashboard bound to localhost only — reach it via SSH tunnel
+    volumes:
+      - ./data/vault:/data/vault
+      - ./data/state:/data/state
+
+  syncthing:
+    image: syncthing/syncthing:latest
+    container_name: syncthing
+    restart: unless-stopped
+    hostname: wa-filter-vm
+    environment:
+      - PUID=1000
+      - PGID=1000
+    volumes:
+      - ./data/vault:/var/syncthing/vault
+      - ./data/syncthing-config:/var/syncthing/config
+    ports:
+      - "8384:8384"        # Syncthing web GUI (also tunnel this, don't expose publicly)
+      - "22000:22000/tcp"  # sync protocol
+      - "22000:22000/udp"
+      - "21027:21027/udp"  # local discovery

@@ -1,0 +1,20 @@
+{
+  "name": "whatsapp-filter",
+  "version": "1.0.0",
+  "description": "Self-hosted WhatsApp group filter, dedup, and Obsidian markdown writer",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "baileys": "^6.7.9",
+    "better-sqlite3": "^11.3.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "express-basic-auth": "^1.2.1",
+    "pino": "^9.4.0",
+    "qrcode": "^1.5.4"
+  }
+}
