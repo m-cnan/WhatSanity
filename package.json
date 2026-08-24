@@ -16,5 +16,8 @@
     "express-basic-auth": "^1.2.1",
     "pino": "^9.4.0",
     "qrcode": "^1.5.4"
+  },
+  "overrides": {
+    "libsignal": "npm:@whiskeysockets/libsignal-node@2.0.1"
   }
 }
