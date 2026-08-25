@@ -1,54 +1,63 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>WhatsApp Filter — Control Panel</title>
-<link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <header>
-    <h1>WhatsApp Filter</h1>
-    <span id="status-pill" class="pill">checking…</span>
-  </header>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WhatsApp Filter — Control Panel</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>WhatsApp Filter</h1>
+      <span id="status-pill" class="pill">checking…</span>
+    </header>
 
-  <main>
-    <section id="qr-section" class="card hidden">
-      <h2>Scan to connect</h2>
-      <p>Open WhatsApp → Linked Devices → Link a Device, and scan this code.</p>
-      <img id="qr-img" alt="QR code" />
-    </section>
+    <main>
+      <section id="qr-section" class="card hidden">
+        <h2>Scan to connect</h2>
+        <p>
+          Open WhatsApp → Linked Devices → Link a Device, and scan this code.
+        </p>
+        <img id="qr-img" alt="QR code" />
+      </section>
 
-    <section class="card">
-      <h2>Groups</h2>
-      <p class="hint">Toggle on the groups you want filtered messages from. New groups appear here after they've sent at least one message, or after reconnecting.</p>
-      <div id="groups-list" class="list"></div>
-    </section>
+      <section class="card">
+        <h2>Groups</h2>
+        <p class="hint">
+          Toggle on the groups you want filtered messages from. New groups
+          appear here after they've sent at least one message, or after
+          reconnecting.
+        </p>
+        <div id="groups-list" class="list"></div>
+      </section>
 
-    <section class="card">
-      <h2>Blocked keywords</h2>
-      <p class="hint">Messages containing any of these (case-insensitive) get dropped as noise.</p>
-      <div class="row">
-        <input id="keyword-input" type="text" placeholder="e.g. giveaway" />
-        <button id="add-keyword-btn">Add</button>
-      </div>
-      <div id="keywords-list" class="list"></div>
-    </section>
+      <section class="card">
+        <h2>Watch keywords</h2>
+        <p class="hint">
+          Only messages containing at least one of these (case-insensitive).
+          Nothing is saved until you add at least one.
+        </p>
+        <div class="row">
+          <input id="keyword-input" type="text" placeholder="e.g. giveaway" />
+          <button id="add-keyword-btn">Add</button>
+        </div>
+        <div id="keywords-list" class="list"></div>
+      </section>
 
-    <section class="card">
-      <h2>Settings</h2>
-      <div class="row">
-        <label>Minimum text length to keep</label>
-        <input id="min-text-length" type="number" min="0" />
-      </div>
-      <div class="row">
-        <label>Max media size (MB) before skipping download</label>
-        <input id="max-media-mb" type="number" min="1" />
-      </div>
-      <button id="save-settings-btn">Save settings</button>
-    </section>
-  </main>
+      <section class="card">
+        <h2>Settings</h2>
+        <div class="row">
+          <label>Minimum text length to keep</label>
+          <input id="min-text-length" type="number" min="0" />
+        </div>
+        <div class="row">
+          <label>Max media size (MB) before skipping download</label>
+          <input id="max-media-mb" type="number" min="1" />
+        </div>
+        <button id="save-settings-btn">Save settings</button>
+      </section>
+    </main>
 
-  <script src="app.js"></script>
-</body>
+    <script src="app.js"></script>
+  </body>
 </html>

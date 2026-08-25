@@ -18,6 +18,6 @@
     "qrcode": "^1.5.4"
   },
   "overrides": {
-    "libsignal": "npm:@whiskeysockets/libsignal-node@2.0.1"
+    "libsignal": "6.0.0"
   }
 }

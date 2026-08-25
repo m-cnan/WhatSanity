@@ -1,21 +1,24 @@
-import { config } from '../config.js';
-import { getKeywords, getSetting } from '../db/db.js';
+import { config } from "../config.js";
+import { getKeywords, getSetting } from "../db/db.js";
 
 function minTextLength() {
-  return parseInt(getSetting('minTextLength', String(config.minTextLength)), 10);
+  return parseInt(
+    getSetting("minTextLength", String(config.minTextLength)),
+    10,
+  );
 }
 
 // Pull whatever text exists out of a Baileys message object,
 // regardless of which message type it arrived as.
 export function extractText(message) {
-  if (!message) return '';
+  if (!message) return "";
   return (
     message.conversation ||
     message.extendedTextMessage?.text ||
     message.imageMessage?.caption ||
     message.videoMessage?.caption ||
     message.documentMessage?.caption ||
-    ''
+    ""
   ).trim();
 }
 
@@ -49,9 +52,14 @@ export function hasMedia(message) {
   );
 }
 
-export function isBlockedByKeyword(text) {
+// Watch keywords work as an ALLOWLIST: only messages containing at least:wq
+//
+// one of them survive. If none are configured yet, nothing passes —
+// so you don't get flooded before you've set your first keyword.
+export function matchesWatchKeywords(text) {
+  const keywords = getKeywords();
+  if (keywords.length === 0) return false;
   if (!text) return false;
   const lower = text.toLowerCase();
-  const keywords = getKeywords();
   return keywords.some((k) => lower.includes(k.pattern));
 }

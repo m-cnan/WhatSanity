@@ -1,8 +1,10 @@
 import { isGroupEnabled, upsertGroup } from '../db/db.js';
-import { extractText, isNoise, isBlockedByKeyword, hasMedia } from '../filters/noise.js';
+import { extractText, isNoise, matchesWatchKeywords, hasMedia } from '../filters/noise.js';
 import { isDuplicateText } from '../dedup/dedup.js';
 import { handleMedia } from '../media/media.js';
 import { appendMessage } from '../writer/markdown.js';
+
+if (!matchesWatchKeywords(text)) continue; // allowlist: must match a watch keyword
 
 function slugify(name) {
   return (name || 'group')
