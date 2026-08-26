@@ -34,9 +34,17 @@ CREATE TABLE IF NOT EXISTS dedup_text (
 
 CREATE TABLE IF NOT EXISTS dedup_media (
   hash TEXT PRIMARY KEY,
+  path TEXT,
   seen_at TEXT DEFAULT (datetime('now'))
 );
 `);
+
+// Safe migration for older databases
+try {
+  db.exec(`ALTER TABLE dedup_media ADD COLUMN path TEXT`);
+} catch {
+  // column already exists
+}
 
 // --- groups ---
 export function upsertGroup(jid, name) {
@@ -57,7 +65,7 @@ export function isGroupEnabled(jid) {
   return !!row && row.enabled === 1;
 }
 
-// --- keywords (blocklist, case-insensitive substring match) ---
+// --- keywords ---
 export function addKeyword(pattern) {
   db.prepare(`INSERT OR IGNORE INTO keywords (pattern) VALUES (?)`).run(pattern.toLowerCase().trim());
 }
@@ -80,19 +88,25 @@ export function setSetting(key, value) {
   ).run(key, String(value));
 }
 
-// --- dedup ---
+// --- dedup text ---
 export function seenTextHash(hash) {
   return !!db.prepare(`SELECT 1 FROM dedup_text WHERE hash = ?`).get(hash);
 }
 export function recordTextHash(hash) {
   db.prepare(`INSERT OR IGNORE INTO dedup_text (hash) VALUES (?)`).run(hash);
 }
+
+// --- dedup media (now returns path too) ---
 export function seenMediaHash(hash) {
-  return !!db.prepare(`SELECT 1 FROM dedup_media WHERE hash = ?`).get(hash);
+  return db.prepare(`SELECT path FROM dedup_media WHERE hash = ?`).get(hash);
 }
-export function recordMediaHash(hash) {
-  db.prepare(`INSERT OR IGNORE INTO dedup_media (hash) VALUES (?)`).run(hash);
+export function recordMediaHash(hash, relativePath) {
+  db.prepare(
+    `INSERT INTO dedup_media (hash, path) VALUES (?, ?)
+     ON CONFLICT(hash) DO UPDATE SET path = COALESCE(excluded.path, dedup_media.path)`
+  ).run(hash, relativePath || null);
 }
+
 export function pruneDedup(ttlHours) {
   db.prepare(`DELETE FROM dedup_text WHERE seen_at < datetime('now', ?)`).run(`-${ttlHours} hours`);
   db.prepare(`DELETE FROM dedup_media WHERE seen_at < datetime('now', ?)`).run(`-${ttlHours} hours`);

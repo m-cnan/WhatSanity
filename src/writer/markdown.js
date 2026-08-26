@@ -19,12 +19,14 @@ function ensureNoteExists(filePath, date) {
   fs.writeFileSync(filePath, header);
 }
 
-// Escape characters that would break a callout block or markdown rendering.
 function escapeForCallout(text) {
-  return text.replace(/\n/g, '\n> ');
+  return text
+    .replace(/\r\n/g, '\n')
+    .replace(/\n+$/g, '')
+    .replace(/\n/g, '\n> ');
 }
 
-export function appendMessage({ groupName, senderName, time, text, mediaRelPath, mediaNote, groupTag }) {
+export function appendMessage({ groupName, senderName, time, text, quotedText, mediaRelPath, groupTag }) {
   const date = new Date();
   const filePath = path.join(waDir, todayFilename(date));
   ensureNoteExists(filePath, date);
@@ -32,15 +34,20 @@ export function appendMessage({ groupName, senderName, time, text, mediaRelPath,
   const tag = groupTag ? ` #wa/${groupTag}` : '';
   let block = `> [!note] ${time} · ${groupName} · ${senderName}${tag}\n`;
 
+  if (quotedText) {
+    block += `> **Replying to:**\n`;
+    block += `> > ${escapeForCallout(quotedText).replace(/\n> /g, '\n> > ')}\n`;
+    block += `>\n`;
+  }
+
   if (text) {
     block += `> ${escapeForCallout(text)}\n`;
   }
   if (mediaRelPath) {
     block += `> ![[${mediaRelPath}]]\n`;
   }
-  if (mediaNote) {
-    block += `> _${mediaNote}_\n`;
-  }
+
+  // True blank line between callouts
   block += '\n';
 
   fs.appendFileSync(filePath, block);

@@ -2,14 +2,9 @@ import { config } from "../config.js";
 import { getKeywords, getSetting } from "../db/db.js";
 
 function minTextLength() {
-  return parseInt(
-    getSetting("minTextLength", String(config.minTextLength)),
-    10,
-  );
+  return parseInt(getSetting("minTextLength", String(config.minTextLength)), 10);
 }
 
-// Pull whatever text exists out of a Baileys message object,
-// regardless of which message type it arrived as.
 export function extractText(message) {
   if (!message) return "";
   return (
@@ -22,7 +17,20 @@ export function extractText(message) {
   ).trim();
 }
 
-// A handful of very common low-signal messages worth dropping outright.
+// Get the text of the message being replied to (if any)
+export function extractQuotedText(message) {
+  if (!message) return null;
+  const ctx =
+    message.extendedTextMessage?.contextInfo ||
+    message.imageMessage?.contextInfo ||
+    message.videoMessage?.contextInfo ||
+    message.documentMessage?.contextInfo ||
+    null;
+
+  if (!ctx?.quotedMessage) return null;
+  return extractText(ctx.quotedMessage) || null;
+}
+
 const NOISE_PATTERNS = [
   /^(ok+|okay|k)\.?$/i,
   /^(lol+|lmao+|haha+)\.?$/i,
@@ -32,10 +40,10 @@ const NOISE_PATTERNS = [
 ];
 
 export function isNoise(message, text) {
-  if (message.stickerMessage && !text) return true; // bare sticker, no caption
+  if (message.stickerMessage && !text) return true;
   if (message.reactionMessage) return true;
-  if (message.protocolMessage) return true; // deletions, edits metadata
-  if (!text && !hasMedia(message)) return true; // nothing to show at all
+  if (message.protocolMessage) return true;
+  if (!text && !hasMedia(message)) return true;
 
   if (text && text.length < minTextLength() && !hasMedia(message)) return true;
   if (text && NOISE_PATTERNS.some((re) => re.test(text.trim()))) return true;
@@ -52,10 +60,6 @@ export function hasMedia(message) {
   );
 }
 
-// Watch keywords work as an ALLOWLIST: only messages containing at least:wq
-//
-// one of them survive. If none are configured yet, nothing passes —
-// so you don't get flooded before you've set your first keyword.
 export function matchesWatchKeywords(text) {
   const keywords = getKeywords();
   if (keywords.length === 0) return false;

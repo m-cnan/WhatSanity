@@ -13,7 +13,6 @@ export function hashBuffer(buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
 }
 
-// Returns true if this text was already seen (and records it if not).
 export function isDuplicateText(text) {
   if (!text) return false;
   const hash = hashText(text);
@@ -22,11 +21,16 @@ export function isDuplicateText(text) {
   return false;
 }
 
-// Same idea for raw media bytes — catches the exact same image/video/doc
-// being forwarded into multiple groups.
-export function isDuplicateMedia(buffer) {
+// Returns { isDuplicate: true, path } or { isDuplicate: false, hash }
+export function checkMedia(buffer) {
   const hash = hashBuffer(buffer);
-  if (seenMediaHash(hash)) return true;
-  recordMediaHash(hash);
-  return false;
+  const existing = seenMediaHash(hash);
+  if (existing) {
+    return { isDuplicate: true, path: existing.path || null };
+  }
+  return { isDuplicate: false, hash };
+}
+
+export function recordMedia(hash, relativePath) {
+  recordMediaHash(hash, relativePath);
 }

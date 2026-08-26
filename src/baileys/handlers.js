@@ -1,10 +1,8 @@
 import { isGroupEnabled, upsertGroup } from '../db/db.js';
-import { extractText, isNoise, matchesWatchKeywords, hasMedia } from '../filters/noise.js';
+import { extractText, extractQuotedText, isNoise, matchesWatchKeywords, hasMedia } from '../filters/noise.js';
 import { isDuplicateText } from '../dedup/dedup.js';
 import { handleMedia } from '../media/media.js';
 import { appendMessage } from '../writer/markdown.js';
-
-if (!matchesWatchKeywords(text)) continue; // allowlist: must match a watch keyword
 
 function slugify(name) {
   return (name || 'group')
@@ -19,43 +17,49 @@ function formatTime(ts) {
   return d.toTimeString().slice(0, 5);
 }
 
-// Called on every messages.upsert event from Baileys.
 export async function onMessages(sock, { messages, type }) {
-  if (type !== 'notify') return; // ignore history-sync batches, only live messages
+  if (type !== 'notify') return;
 
   for (const fullMsg of messages) {
     const jid = fullMsg.key?.remoteJid;
-    if (!jid || !jid.endsWith('@g.us')) continue; // groups only
-    if (fullMsg.key.fromMe) continue; // skip your own messages
+    if (!jid || !jid.endsWith('@g.us')) continue;
+    if (fullMsg.key.fromMe) continue;
     if (!fullMsg.message) continue;
-
-    if (!isGroupEnabled(jid)) continue; // allowlist check
+    if (!isGroupEnabled(jid)) continue;
 
     const text = extractText(fullMsg.message);
+    const quotedText = extractQuotedText(fullMsg.message);
+
+    // Keyword check on the actual message text (and quoted text as fallback)
+    const hasKeyword = matchesWatchKeywords(text) || matchesWatchKeywords(quotedText || '');
+    if (!hasKeyword) continue;
 
     if (isNoise(fullMsg.message, text)) continue;
-    if (isBlockedByKeyword(text)) continue;
 
     const textIsDup = text ? isDuplicateText(text) : false;
-    // If there's no media and the text is a dup, this message adds nothing new — drop it.
-    if (textIsDup && !hasMedia(fullMsg.message)) continue;
 
     let mediaRelPath = null;
-    let mediaNote = null;
+    let mediaIsNew = false;
 
     if (hasMedia(fullMsg.message)) {
       const result = await handleMedia(sock, fullMsg);
-      if (result) {
-        if (result.skipped) {
-          mediaNote = result.reason;
-        } else {
-          mediaRelPath = result.relativePath;
-        }
+      if (result && !result.skipped && result.relativePath) {
+        mediaRelPath = result.relativePath;
+        mediaIsNew = !result.reused;
       }
     }
 
-    // If text was a dup AND media was also a dup/skip-with-nothing-new, drop entirely.
-    if (textIsDup && !mediaRelPath && !mediaNote) continue;
+    // === Final drop decision (exactly what you asked for) ===
+    // Drop if: nothing new at all
+    // - same text (or no text) AND same media (or no media)
+    const hasUsefulText = text && !textIsDup;
+    const hasUsefulMedia = !!mediaRelPath; // either new or reused
+
+    if (!hasUsefulText && !hasUsefulMedia) continue;
+
+    // Extra rule: if media is only a reuse AND text is missing/duplicate → drop
+    // (this catches "same media, no text" and "exact same forward")
+    if (!hasUsefulText && mediaRelPath && !mediaIsNew) continue;
 
     let groupName = jid;
     try {
@@ -63,7 +67,7 @@ export async function onMessages(sock, { messages, type }) {
       groupName = meta.subject || jid;
       upsertGroup(jid, groupName);
     } catch {
-      // fall back to jid if metadata lookup fails
+      // fallback
     }
 
     const senderName = fullMsg.pushName || fullMsg.key.participant?.split('@')[0] || 'Unknown';
@@ -72,15 +76,14 @@ export async function onMessages(sock, { messages, type }) {
       groupName,
       senderName,
       time: formatTime(fullMsg.messageTimestamp),
-      text: textIsDup ? null : text, // don't repeat text we've already logged elsewhere
+      text: hasUsefulText ? text : null,
+      quotedText,
       mediaRelPath,
-      mediaNote,
       groupTag: slugify(groupName),
     });
   }
 }
 
-// Called on groups.upsert / groups.update — keeps the dashboard's group list current.
 export function onGroupsUpdate(groups) {
   for (const g of groups) {
     if (g.id && g.subject) {
