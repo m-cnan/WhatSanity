@@ -1,4 +1,4 @@
-import { isGroupEnabled, upsertGroup } from "../db/db.js";
+import { isGroupEnabled, upsertGroup, getSetting } from "../db/db.js";
 import {
   extractText,
   extractQuotedText,
@@ -15,9 +15,24 @@ import {
 } from "../media/pdf.js";
 import { appendMessage } from "../writer/markdown.js";
 import { config } from "../config.js";
-import { getSetting } from "../db/db.js";
 
-// ... slugify + formatTime (keep your IST version) ...
+function slugify(name) {
+  return (name || "group")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 30);
+}
+
+function formatTime(ts) {
+  const d = new Date((ts || Date.now() / 1000) * 1000);
+  return d.toLocaleTimeString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
 
 function maxPdfMb() {
   return parseFloat(getSetting("maxPdfMb", String(config.maxPdfMb ?? 5)));
@@ -37,13 +52,13 @@ export async function onMessages(sock, { messages, type }) {
     const quotedText = extractQuotedText(fullMsg.message);
     const fileName = getDocumentFileName(fullMsg.message);
 
-    // 1) caption / body  2) quoted  3) filename
+    // 1) caption/body  2) quoted  3) filename
     let hasKeyword =
       matchesWatchKeywords(text) ||
       matchesWatchKeywords(quotedText || "") ||
       matchesWatchKeywords(fileName);
 
-    // 4) PDF body — only if still no match, and under PDF size cap
+    // 4) PDF body — only if still no match, under PDF size cap
     let preloadedBuffer = null;
     if (!hasKeyword && isPdfDocument(fullMsg.message)) {
       const node = fullMsg.message.documentMessage;
@@ -55,7 +70,7 @@ export async function onMessages(sock, { messages, type }) {
           if (matchesWatchKeywords(pdfText)) {
             hasKeyword = true;
           } else {
-            preloadedBuffer = null; // not relevant — don't keep buffer
+            preloadedBuffer = null;
           }
         } catch {
           preloadedBuffer = null;
@@ -70,21 +85,26 @@ export async function onMessages(sock, { messages, type }) {
 
     let mediaRelPath = null;
     let mediaIsNew = false;
+    let mediaNote = null;
 
     if (hasMedia(fullMsg.message)) {
       const result = await handleMedia(sock, fullMsg, {
         preloadedBuffer: preloadedBuffer || undefined,
       });
-      if (result && !result.skipped && result.relativePath) {
-        mediaRelPath = result.relativePath;
-        mediaIsNew = !result.reused;
+      if (result) {
+        if (result.skipped) {
+          mediaNote = result.reason || null;
+        } else if (result.relativePath) {
+          mediaRelPath = result.relativePath;
+          mediaIsNew = !result.reused;
+        }
       }
     }
 
     const hasUsefulText = text && !textIsDup;
     const hasUsefulMedia = !!mediaRelPath;
 
-    if (!hasUsefulText && !hasUsefulMedia) continue;
+    if (!hasUsefulText && !hasUsefulMedia && !mediaNote) continue;
     if (!hasUsefulText && mediaRelPath && !mediaIsNew) continue;
 
     let groupName = jid;
@@ -106,6 +126,7 @@ export async function onMessages(sock, { messages, type }) {
       text: hasUsefulText ? text : null,
       quotedText,
       mediaRelPath,
+      mediaNote,
       groupTag: slugify(groupName),
     });
 
