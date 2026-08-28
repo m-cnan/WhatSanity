@@ -41,7 +41,6 @@ export async function onMessages(sock, { messages, type }) {
     const text = extractText(fullMsg.message);
     const quotedText = extractQuotedText(fullMsg.message);
 
-    // Keyword check on the actual message text (and quoted text as fallback)
     const hasKeyword =
       matchesWatchKeywords(text) || matchesWatchKeywords(quotedText || "");
     if (!hasKeyword) continue;
@@ -52,25 +51,29 @@ export async function onMessages(sock, { messages, type }) {
 
     let mediaRelPath = null;
     let mediaIsNew = false;
+    let mediaNote = null;
 
     if (hasMedia(fullMsg.message)) {
       const result = await handleMedia(sock, fullMsg);
-      if (result && !result.skipped && result.relativePath) {
-        mediaRelPath = result.relativePath;
-        mediaIsNew = !result.reused;
+      if (result) {
+        if (result.skipped) {
+          mediaNote = result.reason || null;
+        } else if (result.relativePath) {
+          mediaRelPath = result.relativePath;
+          mediaIsNew = !result.reused;
+        }
       }
     }
 
-    // === Final drop decision (exactly what you asked for) ===
-    // Drop if: nothing new at all
-    // - same text (or no text) AND same media (or no media)
+    // === Final drop decision ===
+    // Drop only if there's truly nothing new: no fresh text, no media file,
+    // and no note explaining a skipped/oversized media either.
     const hasUsefulText = text && !textIsDup;
-    const hasUsefulMedia = !!mediaRelPath; // either new or reused
+    const hasUsefulMedia = !!mediaRelPath;
 
-    if (!hasUsefulText && !hasUsefulMedia) continue;
+    if (!hasUsefulText && !hasUsefulMedia && !mediaNote) continue;
 
-    // Extra rule: if media is only a reuse AND text is missing/duplicate → drop
-    // (this catches "same media, no text" and "exact same forward")
+    // If media is only a reuse AND text is missing/duplicate → drop
     if (!hasUsefulText && mediaRelPath && !mediaIsNew) continue;
 
     let groupName = jid;
@@ -92,8 +95,10 @@ export async function onMessages(sock, { messages, type }) {
       text: hasUsefulText ? text : null,
       quotedText,
       mediaRelPath,
+      mediaNote,
       groupTag: slugify(groupName),
     });
+
     try {
       await sock.readMessages([fullMsg.key]);
     } catch (err) {
