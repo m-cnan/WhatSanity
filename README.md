@@ -1,4 +1,4 @@
-# WhatsApp Filter → Obsidian
+# WhatSanity
 
 Self-hosted, free, filters selected WhatsApp groups, dedupes text and media,
 drops noise, writes clean Markdown into your Obsidian vault, and syncs it to
