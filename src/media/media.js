@@ -1,21 +1,22 @@
-import { downloadMediaMessage } from 'baileys';
-import fs from 'node:fs';
-import path from 'node:path';
-import { config, mediaDir } from '../config.js';
-import { checkMedia, recordMedia, hashBuffer } from '../dedup/dedup.js';
-import { getSetting } from '../db/db.js';
+cat > (src / media / media.js) << "EOF";
+import { downloadMediaMessage } from "baileys";
+import fs from "node:fs";
+import path from "node:path";
+import { config, mediaDir } from "../config.js";
+import { checkMedia, recordMedia, hashBuffer } from "../dedup/dedup.js";
+import { getSetting } from "../db/db.js";
 
 function maxMediaMb() {
-  return parseFloat(getSetting('maxMediaMb', String(config.maxMediaMb)));
+  return parseFloat(getSetting("maxMediaMb", String(config.maxMediaMb)));
 }
 
 fs.mkdirSync(mediaDir, { recursive: true });
 
 const EXT_BY_TYPE = {
-  imageMessage: 'jpg',
-  videoMessage: 'mp4',
+  imageMessage: "jpg",
+  videoMessage: "mp4",
   documentMessage: null,
-  audioMessage: 'ogg',
+  audioMessage: "ogg",
 };
 
 function getMediaMeta(message) {
@@ -27,7 +28,21 @@ function getMediaMeta(message) {
   return null;
 }
 
-export async function handleMedia(sock, fullMsg) {
+/** Download only — used by PDF keyword probe so we don't fetch twice. */
+export async function downloadMediaBuffer(sock, fullMsg) {
+  return downloadMediaMessage(
+    fullMsg,
+    "buffer",
+    {},
+    { reuploadRequest: sock.updateMediaMessage },
+  );
+}
+
+/**
+ * @param {object} [opts]
+ * @param {Buffer} [opts.preloadedBuffer] - already downloaded bytes (PDF path)
+ */
+export async function handleMedia(sock, fullMsg, opts = {}) {
   const meta = getMediaMeta(fullMsg.message);
   if (!meta) return null;
 
@@ -39,39 +54,35 @@ export async function handleMedia(sock, fullMsg) {
   if (sizeMb > capMb) {
     return {
       skipped: true,
-      reason: `${type.replace('Message', '')} skipped — ${sizeMb.toFixed(1)}MB exceeds ${capMb}MB cap`,
+      reason: `${type.replace("Message", "")} skipped — ${sizeMb.toFixed(1)}MB exceeds ${capMb}MB cap`,
     };
   }
 
-  let buffer;
-  try {
-    buffer = await downloadMediaMessage(
-      fullMsg,
-      'buffer',
-      {},
-      { reuploadRequest: sock.updateMediaMessage }
-    );
-  } catch (err) {
-    return { skipped: true, reason: `media download failed: ${err.message}` };
+  let buffer = opts.preloadedBuffer || null;
+  if (!buffer) {
+    try {
+      buffer = await downloadMediaBuffer(sock, fullMsg);
+    } catch (err) {
+      return { skipped: true, reason: `media download failed: ${err.message}` };
+    }
   }
 
   const check = checkMedia(buffer);
 
-  // Duplicate → reuse previous path if we have it
   if (check.isDuplicate) {
     if (check.path) {
       return { skipped: false, relativePath: check.path, reused: true };
     }
-    // No path stored (very old entry) → treat as nothing new
     return { skipped: true, reason: null };
   }
 
-  // New media → save it
-  const ext = EXT_BY_TYPE[type] || (node.fileName ? path.extname(node.fileName).slice(1) : 'bin');
+  const ext =
+    EXT_BY_TYPE[type] ||
+    (node.fileName ? path.extname(node.fileName).slice(1) : "bin");
   const shortHash = hashBuffer(buffer).slice(0, 10);
-  const filename = `${Date.now()}_${shortHash}.${ext || 'bin'}`;
+  const filename = `${Date.now()}_${shortHash}.${ext || "bin"}`;
   const fullPath = path.join(mediaDir, filename);
-  const relativePath = path.join('media', filename);
+  const relativePath = path.join("media", filename);
 
   fs.writeFileSync(fullPath, buffer);
   recordMedia(check.hash, relativePath);
@@ -83,3 +94,4 @@ export async function handleMedia(sock, fullMsg) {
     sizeMb,
   };
 }
+EOF;

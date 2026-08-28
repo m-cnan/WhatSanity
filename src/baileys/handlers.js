@@ -7,25 +7,20 @@ import {
   hasMedia,
 } from "../filters/noise.js";
 import { isDuplicateText } from "../dedup/dedup.js";
-import { handleMedia } from "../media/media.js";
+import { handleMedia, downloadMediaBuffer } from "../media/media.js";
+import {
+  extractPdfText,
+  isPdfDocument,
+  getDocumentFileName,
+} from "../media/pdf.js";
 import { appendMessage } from "../writer/markdown.js";
+import { config } from "../config.js";
+import { getSetting } from "../db/db.js";
 
-function slugify(name) {
-  return (name || "group")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-    .slice(0, 30);
-}
+// ... slugify + formatTime (keep your IST version) ...
 
-function formatTime(ts) {
-  const d = new Date((ts || Date.now() / 1000) * 1000);
-  return d.toLocaleTimeString("en-IN", {
-    timeZone: "Asia/Kolkata",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
+function maxPdfMb() {
+  return parseFloat(getSetting("maxPdfMb", String(config.maxPdfMb ?? 5)));
 }
 
 export async function onMessages(sock, { messages, type }) {
@@ -40,40 +35,56 @@ export async function onMessages(sock, { messages, type }) {
 
     const text = extractText(fullMsg.message);
     const quotedText = extractQuotedText(fullMsg.message);
+    const fileName = getDocumentFileName(fullMsg.message);
 
-    const hasKeyword =
-      matchesWatchKeywords(text) || matchesWatchKeywords(quotedText || "");
+    // 1) caption / body  2) quoted  3) filename
+    let hasKeyword =
+      matchesWatchKeywords(text) ||
+      matchesWatchKeywords(quotedText || "") ||
+      matchesWatchKeywords(fileName);
+
+    // 4) PDF body — only if still no match, and under PDF size cap
+    let preloadedBuffer = null;
+    if (!hasKeyword && isPdfDocument(fullMsg.message)) {
+      const node = fullMsg.message.documentMessage;
+      const sizeMb = Number(node.fileLength || 0) / (1024 * 1024);
+      if (sizeMb > 0 && sizeMb <= maxPdfMb()) {
+        try {
+          preloadedBuffer = await downloadMediaBuffer(sock, fullMsg);
+          const pdfText = await extractPdfText(preloadedBuffer);
+          if (matchesWatchKeywords(pdfText)) {
+            hasKeyword = true;
+          } else {
+            preloadedBuffer = null; // not relevant — don't keep buffer
+          }
+        } catch {
+          preloadedBuffer = null;
+        }
+      }
+    }
+
     if (!hasKeyword) continue;
-
     if (isNoise(fullMsg.message, text)) continue;
 
     const textIsDup = text ? isDuplicateText(text) : false;
 
     let mediaRelPath = null;
     let mediaIsNew = false;
-    let mediaNote = null;
 
     if (hasMedia(fullMsg.message)) {
-      const result = await handleMedia(sock, fullMsg);
-      if (result) {
-        if (result.skipped) {
-          mediaNote = result.reason || null;
-        } else if (result.relativePath) {
-          mediaRelPath = result.relativePath;
-          mediaIsNew = !result.reused;
-        }
+      const result = await handleMedia(sock, fullMsg, {
+        preloadedBuffer: preloadedBuffer || undefined,
+      });
+      if (result && !result.skipped && result.relativePath) {
+        mediaRelPath = result.relativePath;
+        mediaIsNew = !result.reused;
       }
     }
 
-    // === Final drop decision ===
-    // Drop only if there's truly nothing new: no fresh text, no media file,
-    // and no note explaining a skipped/oversized media either.
     const hasUsefulText = text && !textIsDup;
     const hasUsefulMedia = !!mediaRelPath;
 
-    if (!hasUsefulText && !hasUsefulMedia && !mediaNote) continue;
-
-    // If media is only a reuse AND text is missing/duplicate → drop
+    if (!hasUsefulText && !hasUsefulMedia) continue;
     if (!hasUsefulText && mediaRelPath && !mediaIsNew) continue;
 
     let groupName = jid;
@@ -95,7 +106,6 @@ export async function onMessages(sock, { messages, type }) {
       text: hasUsefulText ? text : null,
       quotedText,
       mediaRelPath,
-      mediaNote,
       groupTag: slugify(groupName),
     });
 

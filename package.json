@@ -15,7 +15,8 @@
     "express": "^4.21.0",
     "express-basic-auth": "^1.2.1",
     "pino": "^9.4.0",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "pdf-parse": "^1.1.1"
   },
   "overrides": {
     "libsignal": "6.0.0"
