@@ -1,4 +1,3 @@
-cat > (src / media / media.js) << "EOF";
 import { downloadMediaMessage } from "baileys";
 import fs from "node:fs";
 import path from "node:path";
@@ -94,4 +93,3 @@ export async function handleMedia(sock, fullMsg, opts = {}) {
     sizeMb,
   };
 }
-EOF;
