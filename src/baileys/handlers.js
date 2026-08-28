@@ -94,6 +94,11 @@ export async function onMessages(sock, { messages, type }) {
       mediaRelPath,
       groupTag: slugify(groupName),
     });
+    try {
+      await sock.readMessages([fullMsg.key]);
+    } catch (err) {
+      console.error("[baileys] readMessages failed", err?.message || err);
+    }
   }
 }
 
