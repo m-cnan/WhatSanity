@@ -86,6 +86,7 @@ export async function onMessages(sock, { messages, type }) {
     let mediaRelPath = null;
     let mediaIsNew = false;
     let mediaNote = null;
+    let mediaIsDocument = false;
 
     if (hasMedia(fullMsg.message)) {
       const result = await handleMedia(sock, fullMsg, {
@@ -97,6 +98,7 @@ export async function onMessages(sock, { messages, type }) {
         } else if (result.relativePath) {
           mediaRelPath = result.relativePath;
           mediaIsNew = !result.reused;
+          mediaIsDocument = result.type === "documentMessage";
         }
       }
     }
@@ -105,7 +107,17 @@ export async function onMessages(sock, { messages, type }) {
     const hasUsefulMedia = !!mediaRelPath;
 
     if (!hasUsefulText && !hasUsefulMedia && !mediaNote) continue;
-    if (!hasUsefulText && mediaRelPath && !mediaIsNew) continue;
+    // Re-sent photos/videos with no new caption are dropped as spam.
+    // Documents/PDFs are exempt: a keyword hit on the same file is still
+    // a meaningful event (e.g. a notice re-shared in another group or on
+    // another day), so it must still land in today's note even though the
+    // underlying file on disk is reused rather than re-saved.
+    if (!hasUsefulText && mediaRelPath && !mediaIsNew && !mediaIsDocument)
+      continue;
+
+    if (mediaIsDocument && !mediaIsNew && !mediaNote) {
+      mediaNote = "duplicate file — already saved, reusing existing copy";
+    }
 
     let groupName = jid;
     try {

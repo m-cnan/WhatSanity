@@ -70,7 +70,7 @@ export async function handleMedia(sock, fullMsg, opts = {}) {
 
   if (check.isDuplicate) {
     if (check.path) {
-      return { skipped: false, relativePath: check.path, reused: true };
+      return { skipped: false, relativePath: check.path, reused: true, type };
     }
     return { skipped: true, reason: null };
   }
