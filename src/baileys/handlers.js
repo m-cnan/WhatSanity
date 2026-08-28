@@ -1,28 +1,39 @@
-import { isGroupEnabled, upsertGroup } from '../db/db.js';
-import { extractText, extractQuotedText, isNoise, matchesWatchKeywords, hasMedia } from '../filters/noise.js';
-import { isDuplicateText } from '../dedup/dedup.js';
-import { handleMedia } from '../media/media.js';
-import { appendMessage } from '../writer/markdown.js';
+import { isGroupEnabled, upsertGroup } from "../db/db.js";
+import {
+  extractText,
+  extractQuotedText,
+  isNoise,
+  matchesWatchKeywords,
+  hasMedia,
+} from "../filters/noise.js";
+import { isDuplicateText } from "../dedup/dedup.js";
+import { handleMedia } from "../media/media.js";
+import { appendMessage } from "../writer/markdown.js";
 
 function slugify(name) {
-  return (name || 'group')
+  return (name || "group")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
     .slice(0, 30);
 }
 
 function formatTime(ts) {
   const d = new Date((ts || Date.now() / 1000) * 1000);
-  return d.toTimeString().slice(0, 5);
+  return d.toLocaleTimeString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 export async function onMessages(sock, { messages, type }) {
-  if (type !== 'notify') return;
+  if (type !== "notify") return;
 
   for (const fullMsg of messages) {
     const jid = fullMsg.key?.remoteJid;
-    if (!jid || !jid.endsWith('@g.us')) continue;
+    if (!jid || !jid.endsWith("@g.us")) continue;
     if (fullMsg.key.fromMe) continue;
     if (!fullMsg.message) continue;
     if (!isGroupEnabled(jid)) continue;
@@ -31,7 +42,8 @@ export async function onMessages(sock, { messages, type }) {
     const quotedText = extractQuotedText(fullMsg.message);
 
     // Keyword check on the actual message text (and quoted text as fallback)
-    const hasKeyword = matchesWatchKeywords(text) || matchesWatchKeywords(quotedText || '');
+    const hasKeyword =
+      matchesWatchKeywords(text) || matchesWatchKeywords(quotedText || "");
     if (!hasKeyword) continue;
 
     if (isNoise(fullMsg.message, text)) continue;
@@ -70,7 +82,8 @@ export async function onMessages(sock, { messages, type }) {
       // fallback
     }
 
-    const senderName = fullMsg.pushName || fullMsg.key.participant?.split('@')[0] || 'Unknown';
+    const senderName =
+      fullMsg.pushName || fullMsg.key.participant?.split("@")[0] || "Unknown";
 
     appendMessage({
       groupName,
